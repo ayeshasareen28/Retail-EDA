@@ -1,0 +1,251 @@
+---
+title: "Data Wrangling Final Project"
+author: "Project Group 7"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+### Regork Exploratory Data Analysis (Using Complete Journey dataset)
+
+# Results {.tabset}
+
+## **Synopsis**
+
+The purpose of this project is to identify growth opportunities at Regork, where the company could invest future resources to increase revenue and profits.
+
+As data scientists working for the company, we analysed the dataset from the Complete Journey package, which provides details of household level transactions on a wide range of demographics. After cleaning up the data we loaded relevant packages that we needed to perform multiple univariate and multivariate analysis.
+
+Our business goal was to identify how we could maximize the sales of Frozen foods. With our analysis we looked for patterns and correlations in our dataset, to identify target markets for increasing sales, along with that we wanted to make sure that Regork is well stocked at all seasons to accommodate rises and dips in sales of certain product categories for each quarter.
+
+We looked into the age groups, marital status and income group of the demographic along with seasonal pattern identification of products bought by them and the brands they prefer to support all the propositions we made to increase the sales of frozen foods.
+
+Each proposition has been explained in the later sections along with the analysis and graphs to support them.
+
+
+## **Packages/Libraries**
+
+
+```{r,warning=FALSE,message=FALSE}
+library(completejourney) #data
+library(tidyverse) #a lot of stuff
+library(dplyr) #additional data wrangling
+library(ggplot2) #plotting capabilities
+library(lubridate) #date-related functions
+library(gridExtra) #grid ordering
+library(grid) #title settings
+library(RColorBrewer) #added color options
+```
+
+## **Clean Data**
+```{r}
+#creating data points
+data1 <- demographics %>%
+  left_join(get_transactions()) %>%
+  left_join(products)
+
+frozen <- data1 %>%
+  filter(str_detect(product_category, regex("(FROZEN|FRZN)")))
+
+age_groups <- frozen %>%
+  group_by(age) %>%
+  mutate(total_sales = sum(sales_value), month = month(transaction_timestamp))
+
+#Rename/combine product_category values to follow same wording for readability
+#Keeping the abbreviated form "FRZN..." because it is used more and its shorter, so will save us space while graphing
+frozen$product_category[frozen$product_category == "SEAFOOD - FROZEN"] <- "FRZN SEAFOOD" #combining "SEAFOOD - FROZEN" with "FRZN SEAFOOD" bc we cannot differentiate the two without more information
+frozen$product_category[frozen$product_category == "FROZEN - BOXED(GROCERY)"] <- "FRZN GROCERY BOXES"
+frozen$product_category[frozen$product_category == "FROZEN BREAD/DOUGH"] <- "FRZN BREAD/DOUGH"
+frozen$product_category[frozen$product_category == "FROZEN CHICKEN"] <- "FRZN CHICKEN"
+frozen$product_category[frozen$product_category == "FROZEN MEAT"] <- "FRZN MEAT" #grouping these together
+frozen$product_category[frozen$product_category == "FRZN MEAT/MEAT DINNERS"] <- "FRZN MEAT DINNERS" #removing redundant wording
+frozen$product_category[frozen$product_category == "FROZEN PIE/DESSERTS"] <- "FRZN DESSERTS" #pie is considered a dessert for most people. shortening the name to base "...dessert"
+frozen$product_category[frozen$product_category == "FROZEN PIZZA"] <- "FRZN PIZZA"
+#this leaves us with 16 distinct product_category values
+
+table(frozen$product_category) #shows updated product categories
+
+colSums(is.na(frozen)) #NAs exist in the following columns: marital_status, home_ownership and package_size
+  #for our purposes, the NAs do not need to be removed
+```
+
+## **Exploratory Data Analysis** {.tabset}
+ 
+### Age Group
+
+```{r}
+#For which age groups is there a difference?
+ggplot(data = age_groups, aes(x = marital_status)) +
+  geom_bar(aes(fill=marital_status), color="black") +
+  scale_fill_brewer(palette = "RdYlBu") +
+  labs(x = "Marital Status", y = "Frozen foods purchased") +
+  ggtitle("Do unmarried people eat more frozen food than married people?", subtitle = "Grocery shopping data from 2,469 households compared by age group.") +
+  facet_wrap(~ age, nrow = 2)
+```
+
+According to stereotypes about domestic life, we might have expected unmarried people to eat more frozen convenience food and married people to eat less frozen food because they cook fresh meals. This is not the case for the age segments 25-34 and 35-44, the reverse is true!
+
+Let’s drill down deeper and see which product categories contribute to this difference. We'll look at the quantity of items sold across all months/quarters to determine the most desired product categories related to frozen food.
+
+### Seasonality
+
+```{r, fig.height=9, fig.width=14}
+
+ref_lines <- c(2000,4000,6000,8000)
+
+title <- textGrob("Frozen Food Purchases by Quarter", gp=gpar(fontsize=18)) #main title
+
+q1 <- frozen %>% #"FROZEN" value not descriptive enough for graph relevance
+  mutate(month = month(transaction_timestamp), quarter = quarter(transaction_timestamp)) %>%
+  filter(product_category != "FROZEN" & quarter == 1) %>% #1st quarter data
+  arrange(product_category) %>% #reads alphabetically from bottom to top
+  ggplot(aes(x = product_category, y = quantity)) +
+  geom_bar(stat = 'identity',aes(fill=factor(month))) + #stacks quarter months
+  scale_fill_brewer(palette = "RdYlBu") + #selecting colors that pop
+  geom_hline(yintercept = ref_lines, color = 'gray') + #ref lines to view scaling
+  coord_flip() +
+  labs(x = "Product Category", y = "# Items Sold") +
+  ggtitle("Q1")
+
+q2 <- frozen %>%
+  mutate(month = month(transaction_timestamp), quarter = quarter(transaction_timestamp)) %>%
+  filter(product_category != "FROZEN" & quarter == 2) %>%
+  arrange(product_category) %>% 
+  ggplot(aes(x = product_category, y = quantity)) +
+  geom_bar(stat = 'identity',aes(fill=factor(month))) +
+  scale_fill_brewer(palette = "RdYlBu") +
+  geom_hline(yintercept = ref_lines, color = 'gray') + 
+  coord_flip() +
+  labs(x = "Product Category", y = "# Items Sold") +
+  ggtitle("Q2")
+  
+q3 <- frozen %>%
+  mutate(month = month(transaction_timestamp), quarter = quarter(transaction_timestamp)) %>%
+  filter(product_category != "FROZEN" & quarter == 3) %>%
+  arrange(product_category) %>% 
+  ggplot(aes(x = product_category, y = quantity)) +
+  geom_bar(stat = 'identity',aes(fill=factor(month))) +
+  scale_fill_brewer(palette = "RdYlBu") +
+  geom_hline(yintercept = ref_lines, color = 'gray') + 
+  coord_flip() +
+  labs(x = "Product Category", y = "# Items Sold") +
+  ggtitle("Q3")
+  
+q4 <- frozen %>%
+  mutate(month = month(transaction_timestamp), quarter = quarter(transaction_timestamp)) %>%
+  filter(product_category != "FROZEN" & quarter == 4) %>%
+  arrange(product_category) %>% 
+  ggplot(aes(x = product_category, y = quantity)) +
+  geom_bar(stat = 'identity',aes(fill=factor(month))) +
+  scale_fill_brewer(palette = "RdYlBu") +
+  geom_hline(yintercept = ref_lines, color = 'gray') + 
+  coord_flip() +
+  labs(x = "Product Category", y = "# Items Sold") +
+  ggtitle("Q4")
+
+grid.arrange(q1,q2,q3,q4, ncol = 2, top = title) #ordered plot display
+```
+
+Across all quarters, we've found that there are three products that are consistently the most popular: 1) "FRZN MEAT DINNERS", 2) "FRZN PIZZA" and 3) "FRZN VEGETABLE/VEG DSH". These are all prepaired meal specific items. Due to significant demand, it is recommended to retain or increase the stock/shelf space of items for these product categories. 
+If additional shelf space is needed, we should consider decreasing the stock of the product categories that are least in demand. Some examples include: "FRZN CHICKEN", "FRZN GROCERY BOXES" and "FRZN ICE".
+
+In regards to variability of the amount of goods sold (quantity) across quarters/months, there are some notable fluctuations in the values for certain product categories such as: 
+- "FRZN DESSERTS" best sales month is in November (potentially due to the Thanksgiving holiday).
+- "FRZN MEAT DINNERS" are usually fairly consistent, but take a dip in sales in Q2.
+- Q2 and Q3 are the highest sales quarters for "FRZN NOVELTIES/WTR ICE". Most likely due to the summer months. On hot days everyone wants popsicles!
+
+### Brands
+
+```{r, fig.height=3, fig.width=5}
+#build brand against product category sold graph - did they prefer private vs national - to go a step further
+pref_brand <- frozen %>%
+  ggplot(aes(x = brand, y = quantity)) +
+  geom_bar(stat = 'identity',aes(fill=brand), show.legend = FALSE) +
+  scale_fill_brewer(palette = "RdYlBu") +
+  labs(x = "Brand Type", y = "# Items Sold") +
+  ggtitle("What is the more preferred frozen food brand type?")
+pref_brand
+```
+
+Looking at the brand typing data shows us that customers prefer brands with national recognition as opposed to small/private options. When planning inventory purchases, we should consider stocking more name brands (National).
+
+Next we will look at the top selling product categories in more detail across the highest number of frozen food purchased age groups we found from our intro graph and information on marital status.
+
+### Marital Status
+
+```{r}
+categories1 <- frozen %>%
+  filter(str_detect(product_category, regex("(FRZN MEAT DINNERS|FRZN PIZZA|FRZN VEGETABLE/VEG DSH)"))) %>%
+  filter(age == "25-34" | age == "35-44") %>%
+  group_by(product_category, marital_status) %>%
+  mutate(total_sales = sum(sales_value))
+
+#1-3         
+ggplot(data = categories1, aes(fill=marital_status, y=total_sales, x=product_category)) + 
+  geom_bar(position="dodge", stat="identity", color="black") +
+  scale_fill_brewer(palette = "RdYlBu") +
+  scale_x_discrete(guide = guide_axis(n.dodge=2)) +
+  ggtitle("Which products make the difference? Top 1-3 categories in total sales", subtitle = "Age groups: 25-34 and 35-44") +
+  labs(x = "Product Category", y = "Total Sales")
+```
+```{r}
+#Looking at particular categories categories outside the top 3
+categories2 <- frozen %>%
+  filter(str_detect(product_category, regex("(FRZN POTATOES|FRZN DESSERTS|FRZN BREAKFAST FOODS|FRZN SEAFOOD)"))) %>% 
+  filter(age == "25-34" | age == "35-44") %>%
+  group_by(product_category, marital_status) %>%
+  mutate(total_sales = sum(sales_value))
+             
+ggplot(data = categories2, aes(fill=marital_status, y=total_sales, x=product_category)) + 
+  geom_bar(position="dodge", stat="identity", color = "black") +
+  scale_fill_brewer(palette = "RdYlBu") +
+  ggtitle("How does marital status affect certain frozen product sales outside the top 3?", subtitle = "Age groups: 25-34 and 35-44") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(x = "Product Category", y = "Total Sales")
+```
+
+Three of these categories show unmarried people buying less frozen food than married people (within the age brackets considered). The greatest differences are that of frozen breakfast food followed by desserts and seafood. For frozen breakfast foods customers that are married buy over double as much as those that are unmarried!
+
+This information could be useful for asking further questions: What are the packaging and serving sizes like in the different product categories? Are the sizes too big so that a single person might not want to defrost/cook the items from some product categories? If this is the case for frozen breakfast foods but not for frozen potatoes, the store could stock more breakfast foods with smaller serving sizes.
+
+Additionally, marketing could try to incentivize more unmarried people in trying out seafood or frozen breakfast food. Perhaps they don’t know whether they like some seafood, or they are used to skipping breakfast or buying breakfast on the way to work. But trying out a new food items might get them to change their habits. 
+
+Surveys or focus groups would be ideal for finding out why people do not buy certain foods and whether there’s a good way to get them to buy more of them. Maybe they want more healthy breakfast foods that we don’t have in stock, but could get them. To help our client with their research, we will find out more about which groups of unmarried people specifically are not buying as much frozen foods. The more we can narrow down the demographics, the more targeted the research can be done. By sending out surveys and invitations to focus groups only to the demographics that show the highest discrepancy of frozen food purchases between married and unmarried people, our customers can generate useful information. So our next step is to look more closely at demographic differences.
+
+### Income
+
+```{r}
+by_income <- frozen %>%
+  filter(age == "25-34" | age == "35-44") %>%
+  group_by(income, marital_status) %>%
+  mutate(total_sales = sum(sales_value))
+
+ggplot(data = by_income, aes(fill=marital_status, y=total_sales, x=income)) + 
+  geom_bar(position="dodge", stat="identity", color = 'black') +
+  ggtitle("Does the married/unmarried difference vary across income brackets?", subtitle = "Age groups: 25-34 and 25-44") +
+  scale_fill_brewer(palette = "RdYlBu") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  labs(x = "Income Level", y = "Total Sales")
+```
+
+What we see is that as people get richer, they buy less frozen food for the age ranges tested. This starts at a lower income range for unmarried people than for married people. This might be because at the same income, unmarried people likely have more disposable income and might prefer to eat at a restaurant over eating frozen convenience food at home. For poorer customers that are unmarried, they buy more frozen food, but this relationship reverses at around the income of 35k $ per year. Perhaps unmarried people with less money prefer frozen food because they are concerned about wasting fresh food that might go bad.
+
+## **Summary**
+
+After segmenting our analysis by age groups, we observed some noticeable differences in the total frozen food purchases between the Married and Unmarried groups. These differences were more prominent amongst the 25-34 and 35-44 age groups. Our group segmentation showed a higher purchase incidence on the Frozen Foods category for the Married groups. This specific finding prompted us to search for specific insights behind a purchasing pattern with potential revenue gains for the frozen food category. 
+
+A deeper analysis of product category by purchased quantity, highlighted a much higher relevance for the most popular product categories. Our analysis revealed a ranking for “FRZN MEAT DINNERS”, “FRZN PIZZA” and “FRZN VEGETABLE/VEG DSH” as the top three items across any groups. These items’ superior ranking remained consistent throughout the year; thus making them impervious to seasonality fluctuations. This finding combined with evidence that prepared meals ranked several orders of magnitude higher than the remaining product categories could evidence an inelastic demand for frozen meal products. 
+
+Observing for example that consumer’s preference for frozen meat dinners is between eight and nine times higher than frozen meat (non-dinner) purchases reveals an important and relevant preference for already prepared meals. A similar demand pattern is seen with frozen pizza (which could be considered a “meal” in some demographics) as well as frozen vegetable dishes.
+
+Finally, after performing a combined analysis between the top three product categories and its purchasing pattern across married and unmarried groups; the prominent preference for prepared frozen meals continues to be present. Prepared meals remain highest amongst members of the married group for these three top categories. Furthermore, our income level graph for the Married group reveals a normal demand pattern (after removing outliers), which makes this group much more stable and predictable. The Unmarried group revealed a similar but narrower and right skewed pattern. We could observe that the higher the income bracket for the Unmarried group, its grocery store purchases drop at a much faster rate. This asymmetric demand pattern makes evident a switch in behavior for the Unmarried group when its income bracket increases. They prefer to acquire their meals in much more social settings such as restaurants or social events instead of at grocery stores. 
+
+Our final combined analysis provides support for our insights regarding frozen products; and leads us to conclude that frozen meal products are highly sought after by the majority of Regork customers and that married couples have a very steady and predictable preference for frozen ready to eat meals that can be enjoyed at home.
+
+Our recommendations to increase the frozen aisle sales would be the following:
+
+* Expand the display of dinner options and capitalize on the married group’s strong preference and higher income to increase frozen aisle sales. 
+* Create a “Gain Leader” program for frozen dinner options that are novel, seasonal, and attractive to the married group but would appeal to all groups as well. “Gain Leader” products offer a premium markup and a higher revenue.
+* Include more convenient ready to eat products that would encourage cross selling opportunities with frozen meals such as ready to eat sides and appetizers that would provide a more seemingly home-made dinner experience. 
+* Create a “Loss Leader” program for frozen ready to eat meal options that would attract customers that are not as loyal to Regork. This would promote an increase of traffic to the store that would result in cross selling opportunities across all grocery departments. 
+
+Further studies on price elasticity for frozen dinner items would be necessary to design a “Gain Leader” program specifically targeting these consumers. We would also recommend a series of focus groups designed to improve the frozen aisle experience especially to the married group demographic. 
